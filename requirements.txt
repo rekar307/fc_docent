@@ -5,3 +5,4 @@ streamlit
 python-dotenv
 streamlit-webrtc
 opencv-python-headless
+PyGithub

@@ -1,10 +1,10 @@
 import os
 import cv2
-import numpy as np
 import streamlit as st
 from openai import OpenAI
+from github import Github
 from dotenv import load_dotenv
-from streamlit_webrtc import webrtc_streamer
+from PIL import Image
 
 # .env 파일 로드
 load_dotenv()
@@ -13,8 +13,13 @@ load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key)
 
+# GitHub API 클라이언트 초기화
+github_token = os.getenv("GITHUB_TOKEN")
+github_repo = os.getenv("GITHUB_REPO")
+g = Github(github_token)
+repo = g.get_repo(github_repo)
 
-# OpenAI API 요청 함수
+
 def describe(image_url):
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -38,54 +43,51 @@ def describe(image_url):
     return response.choices[0].message.content
 
 
-# Streamlit 앱 UI
+def upload_to_github(file_path, repo, commit_message="Add captured image"):
+    with open(file_path, "rb") as file:
+        content = file.read()
+    try:
+        # 파일이 이미 존재하는지 확인
+        contents = repo.get_contents(file_path)
+        repo.update_file(contents.path, commit_message, content, contents.sha)
+    except:
+        repo.create_file(file_path, commit_message, content)
+    # 원시 URL 반환
+    return f"https://raw.githubusercontent.com/{repo.full_name}/main/{file_path}"
+
+
 st.title("AI 도슨트: 이미지를 설명해드려요!")
 
-# **1. URL 입력으로 이미지 설명 요청**
-input_url = st.text_area("이미지 URL을 입력하세요:")
-
-if st.button("URL 해설"):
-    if input_url:
-        try:
-            st.image(input_url, width=300)
-            result = describe(input_url)
-            st.success(result)
-        except Exception as e:
-            st.error(f"오류가 발생했습니다: {e}")
-    else:
-        st.warning("URL을 입력해주세요!")
-
-# **2. 카메라를 사용하여 이미지 캡처**
-st.write("---")
-st.write("또는 카메라로 이미지를 촬영하세요!")
-
-
-# WebRTC 설정
-def video_frame_callback(frame):
-    img = frame.to_ndarray(format="bgr24")
-    return frame
-
-
-webrtc_ctx = webrtc_streamer(
-    key="camera",
-    video_frame_callback=video_frame_callback,
-    media_stream_constraints={"video": True, "audio": False},
-    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+# 파일 업로드 위젯
+uploaded_file = st.file_uploader(
+    "이미지 파일을 업로드하세요", type=["jpg", "jpeg", "png"]
 )
 
-if st.button("카메라 해설"):
-    if webrtc_ctx and webrtc_ctx.video_processor:
-        # 영상에서 캡처
-        frame = webrtc_ctx.video_processor.last_frame
-        if frame is not None:
-            # 이미지를 로컬에 저장 (예: 'captured_image.jpg')
-            img_path = "captured_image.jpg"
-            cv2.imwrite(img_path, frame)
-            st.image(frame, caption="촬영한 이미지", use_column_width=True)
+if uploaded_file is not None:
+    # 업로드된 파일을 저장
+    img_path = f"uploaded_{uploaded_file.name}"
+    with open(img_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
 
-            # 업로드된 이미지를 처리하고 OpenAI 요청 (URL 필요 시 추가 처리 필요)
-            st.warning("촬영한 이미지를 URL로 변환해야 OpenAI 요청이 가능합니다.")
+    # 이미지를 화면에 표시
+    st.image(img_path, caption="업로드된 이미지", use_container_width=True)
+
+    # 이미지 형식 확인
+    try:
+        img = Image.open(img_path)
+        img_format = img.format.lower()
+        if img_format not in ["png", "jpeg", "gif", "webp"]:
+            st.error(
+                "지원되지 않는 이미지 형식입니다. png, jpeg, gif, webp 형식의 이미지를 업로드하세요."
+            )
         else:
-            st.warning("이미지를 캡처하지 못했습니다.")
-    else:
-        st.warning("카메라가 활성화되지 않았습니다.")
+            # 업로드된 이미지를 GitHub에 업로드
+            try:
+                img_url = upload_to_github(img_path, repo)
+                st.success(f"이미지가 GitHub에 업로드되었습니다: {img_url}")
+                result = describe(img_url)
+                st.success(result)
+            except Exception as e:
+                st.error(f"이미지 업로드에 실패했습니다: {e}")
+    except Exception as e:
+        st.error(f"이미지 형식을 확인하는 중 오류가 발생했습니다: {e}")
