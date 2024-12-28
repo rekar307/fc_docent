@@ -56,38 +56,72 @@ def upload_to_github(file_path, repo, commit_message="Add captured image"):
     return f"https://raw.githubusercontent.com/{repo.full_name}/main/{file_path}"
 
 
-st.title("AI 도슨트: 이미지를 설명해드려요!")
+st.title("진수의 AI 도슨트\n이미지를 설명해드려요!")
 
-# 파일 업로드 위젯
-uploaded_file = st.file_uploader(
-    "이미지 파일을 업로드하세요", type=["jpg", "jpeg", "png"]
-)
+# 수평 막대 생성
+col1, col2 = st.columns(2)
 
-if uploaded_file is not None:
-    # 업로드된 파일을 저장
-    img_path = f"uploaded_{uploaded_file.name}"
-    with open(img_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+with col1:
+    st.header("이미지 주소 입력")
+    input_url = st.text_area("여기에 이미지 주소를 입력하세요")
 
-    # 이미지를 화면에 표시
-    st.image(img_path, caption="업로드된 이미지", use_container_width=True)
-
-    # 이미지 형식 확인
-    try:
-        img = Image.open(img_path)
-        img_format = img.format.lower()
-        if img_format not in ["png", "jpeg", "gif", "webp"]:
-            st.error(
-                "지원되지 않는 이미지 형식입니다. png, jpeg, gif, webp 형식의 이미지를 업로드하세요."
-            )
-        else:
-            # 업로드된 이미지를 GitHub에 업로드
+    if st.button("이미지 주소 해설"):
+        if input_url:
             try:
-                img_url = upload_to_github(img_path, repo)
-                st.success(f"이미지가 GitHub에 업로드되었습니다: {img_url}")
-                result = describe(img_url)
-                st.success(result)
+                st.session_state["input_url"] = input_url
+                st.session_state["result_url"] = describe(input_url)
             except Exception as e:
-                st.error(f"이미지 업로드에 실패했습니다: {e}")
-    except Exception as e:
-        st.error(f"이미지 형식을 확인하는 중 오류가 발생했습니다: {e}")
+                st.error(f"요청 오류가 발생했습니다: {e}")
+        else:
+            st.warning("이미지 주소를 입력하세요!")
+
+    if "input_url" in st.session_state:
+        st.image(st.session_state["input_url"], width=300, caption="입력된 이미지 주소")
+    if "result_url" in st.session_state:
+        st.success(st.session_state["result_url"])
+
+with col2:
+    st.header("이미지 파일 업로드")
+    uploaded_file = st.file_uploader(
+        "이미지 파일을 업로드하세요", type=["jpg", "jpeg", "png"]
+    )
+
+    if st.button("파일 업로드 해설"):
+        if uploaded_file is not None:
+            # 업로드된 파일을 저장
+            img_path = f"uploaded_{uploaded_file.name}"
+            with open(img_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            # 이미지를 화면에 표시
+            st.session_state["img_path"] = img_path
+
+            # 이미지 형식 확인
+            try:
+                img = Image.open(img_path)
+                img_format = img.format.lower()
+                if img_format not in ["png", "jpeg", "gif", "webp"]:
+                    st.error(
+                        "지원되지 않는 이미지 형식입니다. png, jpeg, gif, webp 형식의 이미지를 업로드하세요."
+                    )
+                else:
+                    # 업로드된 이미지를 GitHub에 업로드
+                    try:
+                        img_url = upload_to_github(img_path, repo)
+                        st.session_state["img_url"] = img_url
+                        st.session_state["result_file"] = describe(img_url)
+                    except Exception as e:
+                        st.error(f"이미지 업로드에 실패했습니다: {e}")
+            except Exception as e:
+                st.error(f"이미지 형식을 확인하는 중 오류가 발생했습니다: {e}")
+        else:
+            st.warning("이미지 파일을 업로드하세요!")
+
+    if "img_path" in st.session_state:
+        st.image(
+            st.session_state["img_path"],
+            caption="업로드된 이미지",
+            use_container_width=True,
+        )
+    if "result_file" in st.session_state:
+        st.success(st.session_state["result_file"])
