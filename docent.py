@@ -29,7 +29,7 @@ def describe(image_url):
     return response.choices[0].message.content
 
 
-st.title("AI 도슨트: 이미지를 설명해드려요!!!")
+st.title("진수의 AI 도슨트: 이미지를 설명해드려요!")
 
 input_url = st.text_area("여기에 이미지 주소를 입력하세요")
 
